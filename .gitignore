@@ -12,3 +12,6 @@ Project/backend/model_state.pth
 snn/multimodal-snn/data/embedded_data/embeddings/ 
 snn/multimodal-snn/data/features/*.pkl 
 snn/multimodal-snn/checkpoints/*
+snn/multimodal-snn/checkpoints/best_model.pt
+snn/multimodal-snn/best_model.pth
+
