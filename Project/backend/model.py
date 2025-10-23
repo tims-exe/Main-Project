@@ -1,26 +1,75 @@
 import torch
 import torch.nn as nn
+from spikingjelly.activation_based import layer, neuron, functional
 
-class SpikeAttentionNet(nn.Module):
-    def __init__(self, in_dim, embed_dim, num_heads, num_classes, dropout=0.1):
+
+class SpikeNetEfficient(nn.Module):
+    """
+    GPU-Efficient SpikeNet with same input/output signature.
+    Input: (B, seq_len, 1611)
+    Output: (B, 7)
+    """
+    
+    def __init__(self, in_dim=1611, embed_dim=256, num_classes=7, T=32, dropout=0.1):
         super().__init__()
-        self.embed = nn.Linear(in_dim, embed_dim)
-        self.layernorm = nn.LayerNorm(embed_dim)  # add this
-        self.attn = nn.MultiheadAttention(embed_dim, num_heads, dropout=dropout, batch_first=True)
-        self.fc = nn.Sequential(
-            nn.LayerNorm(embed_dim),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(embed_dim, num_classes)
-        )
-
+        self.T = T
+        
+        # Dimensionality Reduction
+        self.input_proj = layer.Linear(in_dim, embed_dim, bias=False)
+        
+        # Spiking Layers
+        self.lif1 = neuron.LIFNode(tau=2.0, detach_reset=True, step_mode='m', v_threshold=1.0, v_reset=0.0)
+        
+        self.fc1 = layer.Linear(embed_dim, embed_dim, bias=False)
+        self.lif2 = neuron.LIFNode(tau=2.0, detach_reset=True, step_mode='m', v_threshold=1.0, v_reset=0.0)
+        
+        self.fc2 = layer.Linear(embed_dim, embed_dim, bias=False)
+        self.lif3 = neuron.LIFNode(tau=2.0, detach_reset=True, step_mode='m', v_threshold=1.0, v_reset=0.0)
+        
+        # Readout
+        self.dropout = layer.Dropout(dropout)
+        self.classifier = layer.Linear(embed_dim, num_classes, bias=True)
+    
     def forward(self, x, mask=None):
-        x = self.embed(x)
-        x = self.layernorm(x)                         # normalize before attention
-        x = torch.clamp(x, -5, 5)                     # clamp to prevent overflow
-        attn_out, _ = self.attn(x, x, x, key_padding_mask=~mask if mask is not None else None)
-        attn_out = torch.nan_to_num(attn_out)         # clean up any accidental NaNs
-        pooled = attn_out.mean(dim=1)
-        logits = self.fc(pooled)
-        logits = torch.nan_to_num(logits)
+        """
+        Args:
+            x: shape (B, seq_len, in_dim=1611)
+            mask: optional (B, seq_len)
+        
+        Returns:
+            logits: shape (B, num_classes=7)
+        """
+        B, L, D = x.shape
+        x = x.to(torch.float32)
+        functional.reset_net(self)
+        
+        # Dimensionality reduction
+        x = self.input_proj(x)  # (B, L, 256)
+        
+        # Spike generation
+        x = x.unsqueeze(0).repeat(self.T, 1, 1, 1)  # (T, B, L, 256)
+        spikes = (torch.rand_like(x, device=x.device) <= torch.sigmoid(x)).float()
+        
+        # Spike processing
+        x = self.lif1(spikes)  # (T, B, L, 256)
+        x = self.fc1(x)  # (T, B, L, 256)
+        x = self.lif2(x)  # (T, B, L, 256)
+        x = self.fc2(x)  # (T, B, L, 256)
+        x = self.lif3(x)  # (T, B, L, 256)
+        
+        # Aggregation
+        x = x.mean(dim=2)  # (T, B, 256)
+        x = x.mean(dim=0)  # (B, 256)
+        
+        # Classification
+        x = self.dropout(x)  # (B, 256)
+        logits = self.classifier(x)  # (B, 7)
+        
         return logits
+
+
+class SpikeNet(SpikeNetEfficient):
+    """Backward compatible alias."""
+    
+    def __init__(self, in_dim, embed_dim, num_classes, T=32, dropout=0.1):
+        super().__init__(in_dim=in_dim, embed_dim=embed_dim, num_classes=num_classes, T=T, dropout=dropout)

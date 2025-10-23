@@ -14,4 +14,6 @@ snn/multimodal-snn/data/features/*.pkl
 snn/multimodal-snn/checkpoints/*
 snn/multimodal-snn/checkpoints/best_model.pt
 snn/multimodal-snn/best_model.pth
-
+snn/multimodal-snn/checkpoints_snn/best_model.pt
+Project/backend/snn_best_model.pth
+snn/multimodal-snn/snn_best_model.pth
