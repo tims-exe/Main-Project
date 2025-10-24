@@ -8,7 +8,7 @@ import snntorch.spikegen as spikegen
 import io
 from spikingjelly.activation_based import functional
 from transformers import AutoTokenizer, AutoModelForCausalLM
-import os
+from huggingface_hub import logout
 
 # Import your efficient SpikeNet model
 from model import SpikeNetEfficient as SpikeNet
@@ -45,7 +45,8 @@ T = 32
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Load SNN Model
+# ---------------- LOAD SNN ----------------
+print("🔹 Loading emotion detection SNN...")
 model = SpikeNet(
     in_dim=IN_DIM,
     embed_dim=EMBED_DIM,
@@ -67,92 +68,25 @@ label_map = {
 }
 
 
-# ---------------- LOCAL LLM (NO API CALLS) ----------------
-print("🔹 Loading local LLM model... (this may take a few seconds)")
-from huggingface_hub import login, logout
-
-# ✅ Ensure no token is used (DialoGPT is public)
-logout()  # clears any default token in the environment
+# ---------------- LOAD LOCAL LLM ----------------
+print("🔹 Loading local LLM model (Phi-2)...")
+logout()  # make sure no Hugging Face auth token is used
 
 LOCAL_MODEL_ID = "microsoft/phi-2"
 
-print("🔹 Loading Phi-2 model (local, no API calls)...")
 tokenizer = AutoTokenizer.from_pretrained(LOCAL_MODEL_ID)
 local_model = AutoModelForCausalLM.from_pretrained(
     LOCAL_MODEL_ID,
     torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
     device_map="auto"
 ).eval()
+
 print("✅ Phi-2 loaded successfully!")
 
 
-
-def query_local_model(prompt):
-    """Generate a local LLM response using Phi-2."""
-    try:
-        inputs = tokenizer(prompt, return_tensors="pt").to(device)
-        outputs = local_model.generate(
-            **inputs,
-            max_new_tokens=150,
-            do_sample=True,
-            temperature=0.7,
-            top_p=0.9,
-            pad_token_id=tokenizer.eos_token_id,
-        )
-
-        return tokenizer.decode(outputs[0], skip_special_tokens=True)
-    except Exception as e:
-        print(f"Local LLM error: {e}")
-        return "I'm having trouble generating a response right now."
-
-
-# ---------------- AUDIO PREPROCESSING ----------------
-def preprocess_audio_to_spikes(audio_bytes, T=32):
-    waveform, sample_rate = torchaudio.load(io.BytesIO(audio_bytes))
-    waveform = waveform.mean(dim=0, keepdim=True)
-
-    mel_spec = torchaudio.transforms.MelSpectrogram(
-        sample_rate=sample_rate,
-        n_fft=1024,
-        hop_length=512,
-        n_mels=64  # reduced to avoid warning
-    )(waveform)
-
-    mel_spec = torchaudio.transforms.AmplitudeToDB()(mel_spec)
-    mel_spec = mel_spec.squeeze(0).T  # [time, mel]
-
-    feat = mel_spec.mean(dim=0).numpy()
-    feat = np.pad(feat, (0, max(0, 1611 - len(feat))))[:1611]
-    feat = feat.astype(np.float32)
-    feat = feat / (np.linalg.norm(feat) + 1e-6)
-    feat = np.clip(feat, 0, 1.0)
-
-    S = spikegen.rate(torch.tensor(feat), num_steps=T).float()
-    mask = torch.ones(T, dtype=torch.bool)
-    return S.unsqueeze(0), mask.unsqueeze(0)
-
-
-# ---------------- EMOTION DETECTION ----------------
-def detect_emotion(audio_bytes):
-    try:
-        spikes, mask = preprocess_audio_to_spikes(audio_bytes, T=T)
-        spikes, mask = spikes.to(device), mask.to(device)
-
-        functional.reset_net(model)
-        with torch.no_grad():
-            logits = model(spikes, mask=mask)
-            pred = logits.argmax(dim=1).item()
-            confidence = torch.softmax(logits, dim=1)[0, pred].item()
-
-        emotion = label_map.get(pred, "Neutral")
-        return emotion, confidence
-    except Exception as e:
-        print(f"Error during emotion detection: {e}")
-        return "Neutral", 0.0
-
-
-# ---------------- EMOTION-AWARE RESPONSE ----------------
-def generate_emotion_aware_response(user_message, emotion):
+# ---------------- LLM GENERATION ----------------
+def generate_llm_response(user_message, emotion="Neutral"):
+    """Generate an LLM response based on text and optional emotion."""
     emotion_prompts = {
         "Neutral": "Respond naturally and conversationally.",
         "Happy": "Be enthusiastic and positive.",
@@ -189,18 +123,65 @@ def generate_emotion_aware_response(user_message, emotion):
     return response
 
 
+# ---------------- AUDIO PREPROCESSING ----------------
+def preprocess_audio_to_spikes(audio_bytes, T=32):
+    waveform, sample_rate = torchaudio.load(io.BytesIO(audio_bytes))
+    waveform = waveform.mean(dim=0, keepdim=True)
+
+    mel_spec = torchaudio.transforms.MelSpectrogram(
+        sample_rate=sample_rate,
+        n_fft=1024,
+        hop_length=512,
+        n_mels=64
+    )(waveform)
+
+    mel_spec = torchaudio.transforms.AmplitudeToDB()(mel_spec)
+    mel_spec = mel_spec.squeeze(0).T  # [time, mel]
+
+    feat = mel_spec.mean(dim=0).numpy()
+    feat = np.pad(feat, (0, max(0, 1611 - len(feat))))[:1611]
+    feat = feat.astype(np.float32)
+    feat = feat / (np.linalg.norm(feat) + 1e-6)
+    feat = np.clip(feat, 0, 1.0)
+
+    S = spikegen.rate(torch.tensor(feat), num_steps=T).float()
+    mask = torch.ones(T, dtype=torch.bool)
+    return S.unsqueeze(0), mask.unsqueeze(0)
+
+
+# ---------------- EMOTION DETECTION ----------------
+def detect_emotion(audio_bytes):
+    try:
+        spikes, mask = preprocess_audio_to_spikes(audio_bytes, T=T)
+        spikes, mask = spikes.to(device), mask.to(device)
+
+        functional.reset_net(model)
+        with torch.no_grad():
+            logits = model(spikes, mask=mask)
+            pred = logits.argmax(dim=1).item()
+            confidence = torch.softmax(logits, dim=1)[0, pred].item()
+
+        emotion = label_map.get(pred, "Neutral")
+        return emotion, confidence
+    except Exception as e:
+        print(f"Error during emotion detection: {e}")
+        return "Neutral", 0.0
+
+
 # ---------------- ROUTES ----------------
 @app.get("/")
 async def health():
     return {"message": "Server Running"}
 
 
+# 💬 Text input — use LLM
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
-    llm_response = generate_emotion_aware_response(request.message, "Neutral")
+    llm_response = generate_llm_response(request.message, "Neutral")
     return ChatResponse(response=llm_response, emotion="Neutral")
 
 
+# 🎙️ Voice input — only emotion prediction
 @app.post("/api/voice", response_model=ChatResponse)
 async def voice(audio: UploadFile = File(...)):
     audio_bytes = await audio.read()
@@ -208,16 +189,16 @@ async def voice(audio: UploadFile = File(...)):
         emotion, confidence = detect_emotion(audio_bytes)
         print(f"Detected emotion: {emotion} (confidence: {confidence:.2f})")
 
-        user_message = "I'm speaking to you with emotion."  # Placeholder until STT is added
-        llm_response = generate_emotion_aware_response(user_message, emotion)
-        print(f"LLM response: {llm_response}")
-
-        return ChatResponse(response=llm_response, emotion=emotion)
+        # Return only emotion prediction, no LLM
+        return ChatResponse(
+            response=f"Detected emotion: {emotion} (confidence: {confidence:.2f})",
+            emotion=emotion
+        )
     except Exception as e:
         print(f"Error processing voice input: {e}")
         return ChatResponse(response="Error processing audio", emotion="Neutral")
 
 
 # Run with:
-# pip install fastapi uvicorn torchaudio snntorch transformers
+# pip install fastapi uvicorn torchaudio snntorch transformers huggingface_hub
 # uvicorn main:app --reload
