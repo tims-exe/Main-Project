@@ -1,153 +1,277 @@
-import sys
-import io
-import os
-import csv
-import logging
-from typing import Dict, Any, List, Optional, Iterator
-
+import pickle
 import numpy as np
-from torch.utils.data import Dataset
-
-from src.feature_extraction.utils import sliding_window_audio, sliding_window_video_frames
-from src.feature_extraction.video_reader_parallel import ThreadedVideoReader, iter_frame_windows
-
-logger = logging.getLogger(__name__)
-if not logger.handlers:
-    h = logging.StreamHandler(sys.stdout)
-    f = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", "%Y-%m-%d %H:%M:%S")
-    h.setFormatter(f)
-    logger.addHandler(h)
-    logger.setLevel(logging.INFO)
+import torch
+from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
+import snntorch.spikegen as spikegen
+from collections import Counter
+from sklearn.model_selection import train_test_split
 
 
-class AVPairSegmentsDataset(Dataset):
+# =====================================
+# Class Imbalance Analysis
+# =====================================
+def analyze_class_imbalance(y, dataset_name="Dataset"):
+    """Analyze and print class imbalance statistics."""
+    unique, counts = np.unique(y, return_counts=True)
+    
+    total = len(y)
+    max_count = counts.max()
+    min_count = counts.min()
+    imbalance_ratio = max_count / min_count
+    
+    print(f"\n{'='*70}")
+    print(f"📊 {dataset_name.upper()} - CLASS IMBALANCE ANALYSIS")
+    print(f"{'='*70}")
+    print(f"Total samples: {total}")
+    print(f"Imbalance ratio (max/min): {imbalance_ratio:.2f}x\n")
+    
+    print(f"{'Class':<8} {'Count':<10} {'Percentage':<12} {'Weight':<10}")
+    print("-" * 70)
+    
+    # Calculate inverse frequency weights
+    weights = {cls: 1.0 / count for cls, count in zip(unique, counts)}
+    
+    for cls, count in zip(unique, counts):
+        pct = 100 * count / total
+        weight = weights[cls]
+        bar_length = int(pct / 3)
+        bar = "█" * bar_length
+        print(f"{cls:<8} {count:<10} {pct:>6.2f}% {bar:<20} {weight:.4f}")
+    
+    print(f"{'='*70}\n")
+    
+    return imbalance_ratio
+
+
+# =====================================
+# Augmentation utilities
+# =====================================
+def temporal_jitter(spike_train, max_shift=2):
+    """Apply temporal jitter to spike trains."""
+    shift = np.random.randint(-max_shift, max_shift + 1)
+    out = np.zeros_like(spike_train)
+    if shift > 0:
+        out[shift:] = spike_train[:-shift]
+    elif shift < 0:
+        out[:shift] = spike_train[-shift:]
+    else:
+        out = spike_train.copy()
+    return np.clip(out, 0, 1)
+
+
+def add_noise(spike_train, noise_level=0.05):
+    """Add Gaussian noise to spike trains."""
+    noise = np.random.randn(*spike_train.shape) * noise_level
+    spike_train = spike_train + noise
+    return np.clip(spike_train, 0, 1)
+
+
+def random_mask(spike_train, mask_prob=0.1):
+    """Apply random masking to temporal dimension."""
+    mask = np.random.rand(spike_train.shape[0]) > mask_prob
+    spike_train = spike_train * mask[:, None]
+    return spike_train, mask
+
+
+# =====================================
+# Dataset class
+# =====================================
+class MELDAudioSpikesAugmented(Dataset):
+    """Dataset for MELD audio emotion classification."""
+    
+    def __init__(self, X, y, T=8, augment=False, spike_cap=1.0):
+        self.X = X
+        self.y = y
+        self.T = T
+        self.augment = augment
+        self.spike_cap = spike_cap
+
+    def __len__(self):
+        return len(self.X)
+
+    def __getitem__(self, idx):
+        x = torch.tensor(self.X[idx], dtype=torch.float32)
+        y = torch.tensor(self.y[idx], dtype=torch.long)
+
+        S = spikegen.rate(x, num_steps=self.T).float()
+        mask = np.ones(self.T, dtype=bool)
+
+        if self.augment:
+            S_np = S.numpy()
+            S_np = temporal_jitter(S_np)
+            S_np = add_noise(S_np)
+            S_np, mask = random_mask(S_np)
+            S = torch.tensor(S_np, dtype=torch.float32)
+        
+        S = torch.clamp(S, 0, self.spike_cap)
+        return S, y, torch.tensor(mask, dtype=torch.bool)
+
+
+# =====================================
+# Custom collate function
+# =====================================
+def collate_fn_spike(batch):
+    """Custom collate function for spike batches."""
+    spikes, labels, masks = zip(*batch)
+    spikes = torch.stack(spikes, dim=0)
+    labels = torch.stack(labels, dim=0)
+    masks = torch.stack(masks, dim=0)
+    return spikes, labels, masks
+
+
+# =====================================
+# Main data loading function (RECOMMENDED APPROACH)
+# =====================================
+def create_balanced_splits(
+    features_path,
+    labels_path,
+    batch_size=32,
+    T=8,
+    augment=True,
+    val_split=0.1,
+    test_split=0.1,
+    num_workers=0,
+    use_weighted_sampling=True,
+):
     """
-    Streams CSV by byte offsets. Returns raw audio windows and video frame lists per segment.
-    No embeddings or spikes here.
+    Create balanced train/val/test splits using WEIGHTED SAMPLING.
+    
+    Args:
+        features_path: Path to pickled features
+        labels_path: Path to pickled labels
+        batch_size: Batch size for data loaders
+        T: Number of timesteps for spike generation
+        augment: Apply augmentations to training set
+        val_split: Validation split ratio
+        test_split: Test split ratio
+        num_workers: Number of worker processes
+        use_weighted_sampling: Use weighted sampling for class balance (RECOMMENDED)
+    
+    Returns:
+        train_loader, val_loader, test_loader: DataLoader objects
     """
-    def __init__(
-        self,
-        csv_file: str,
-        sr: int = 16000,
-        win_sec: float = 1.0,
-        hop_sec: float = 0.5,
-        max_segments: Optional[int] = None,
-        use_threaded_video: bool = True,
-        video_queue_size: int = 256,
-        audio_loader: str = "librosa",  # or "torchaudio"
-        verbose: bool = False,
-    ):
-        self.csv_file = csv_file
-        self.sr = sr
-        self.default_win, self.default_hop = win_sec, hop_sec
-        self.max_segments = max_segments
-        self.use_threaded_video = use_threaded_video
-        self.video_queue_size = video_queue_size
-        self.audio_loader = audio_loader
-        self.verbose = verbose
+    
+    # Load data
+    print("📥 Loading data...")
+    with open(features_path, "rb") as f:
+        train_emb, val_emb, test_emb = pickle.load(f)
+    merged_features = {**train_emb, **val_emb, **test_emb}
 
-        # Byte-offset index
-        self._fh = open(self.csv_file, "r", newline="", encoding="utf-8")
-        self._fh.seek(0)
-        self._header_line = next(self._fh)
-        self._offsets: List[int] = []
-        pos = self._fh.tell()
-        for _ in self._fh:
-            self._offsets.append(pos)
-            pos = self._fh.tell()
+    with open(labels_path, "rb") as f:
+        data_list = pickle.load(f)
+        utter_list = data_list[0]
+        label_idx = data_list[5]
 
-        if verbose:
-            logger.setLevel(logging.DEBUG)
-        logger.info(f"Dataset (raw) init: rows={len(self._offsets)}, sr={sr}, win/hop={win_sec}/{hop_sec}")
+    # Process features and labels
+    print("🔄 Processing features and labels...")
+    feats, labels = [], []
+    for u in utter_list:
+        key = f"{u['dialog']}_{u['utterance']}"
+        if key in merged_features:
+            x = merged_features[key].astype(np.float32)
+            x = x / (np.linalg.norm(x) + 1e-8)
+            x = np.clip(x, 0, 1.0)
+            feats.append(x)
+            labels.append(label_idx[u["y"]])
 
-    def __len__(self) -> int:
-        return len(self._offsets)
+    X = np.stack(feats)
+    y = np.array(labels, dtype=np.int64)
 
-    def __del__(self):
-        try:
-            self._fh.close()
-        except Exception:
-            pass
+    print(f"✅ Loaded: {len(X)} samples, {X.shape[1]} features")
+    analyze_class_imbalance(y, "Full Dataset")
 
-    def _read_row(self, idx: int) -> Dict[str, Any]:
-        self._fh.seek(self._offsets[idx])
-        line = self._fh.readline()
-        reader = csv.DictReader(io.StringIO(self._header_line + line))
-        return next(reader)
+    # Stratified split
+    print("📊 Creating stratified splits...")
+    X_train, X_temp, y_train, y_temp = train_test_split(
+        X, y, test_size=(val_split + test_split), stratify=y, random_state=42
+    )
 
-    def _get_params(self, r: Dict[str, Any], side: int):
-        win = float(r.get(f"win_sec{side}", self.default_win))
-        hop = float(r.get(f"hop_sec{side}", self.default_hop))
-        cap = r.get(f"seg_aligned{side}")
-        seg_aligned = int(cap) if cap and cap.isdigit() else None
-        return win, hop, seg_aligned
+    rel_test_size = test_split / (val_split + test_split)
+    X_val, X_test, y_val, y_test = train_test_split(
+        X_temp, y_temp, test_size=rel_test_size, stratify=y_temp, random_state=42
+    )
 
-    def _load_audio_1d(self, path: str) -> np.ndarray:
-        if self.audio_loader == "torchaudio":
-            import torchaudio as ta, torchaudio.functional as AF
-            wav, sr0 = ta.load(path)
-            if wav.shape[0] > 1:
-                wav = wav.mean(0, keepdim=True)
-            if sr0 != self.sr:
-                wav = AF.resample(wav, sr0, self.sr)
-            return wav.squeeze(0).cpu().numpy().astype(np.float32)
-        else:
-            import librosa
-            y, _ = librosa.load(path, sr=self.sr, mono=True)
-            return y.astype(np.float32)
+    print(f"📁 Train: {len(X_train)} | Val: {len(X_val)} | Test: {len(X_test)}\n")
 
-    def _audio_segments(self, path: str, win: float, hop: float) -> List[np.ndarray]:
-        y = self._load_audio_1d(path)
-        segs = sliding_window_audio(y, self.sr, win, hop)
-        return segs[: self.max_segments] if self.max_segments else segs
+    # Analyze training set imbalance
+    analyze_class_imbalance(y_train, "Training Set")
 
-    def _iter_video(self, path: str, win: float, hop: float) -> Iterator[List[np.ndarray]]:
-        if not self.use_threaded_video:
-            for frames in sliding_window_video_frames(path, win, hop):
-                yield frames
-            return
-        rdr = ThreadedVideoReader(path, queue_size=self.video_queue_size, drop_oldest=True).start()
-        try:
-            for frames in iter_frame_windows(rdr, win_sec=win, hop_sec=hop):
-                yield frames
-        finally:
-            rdr.stop()
+    # Create datasets
+    print("🔧 Creating datasets...")
+    train_set = MELDAudioSpikesAugmented(X_train, y_train, T=T, augment=augment)
+    val_set = MELDAudioSpikesAugmented(X_val, y_val, T=T, augment=False)
+    test_set = MELDAudioSpikesAugmented(X_test, y_test, T=T, augment=False)
 
-    def _collect_video(self, path: str, win: float, hop: float, limit: Optional[int]) -> List[List[np.ndarray]]:
-        vids = []
-        for i, frames in enumerate(self._iter_video(path, win, hop)):
-            if not frames:
-                continue
-            vids.append(frames)
-            if limit and len(vids) >= limit:
-                break
-        return vids
+    # Create samplers
+    if use_weighted_sampling:
+        print("⚖️  Using weighted sampling for class balance...\n")
+        
+        # Compute inverse frequency weights
+        class_counts = Counter(y_train)
+        max_count = max(class_counts.values())
+        
+        # Weight each sample by inverse class frequency
+        weights = []
+        for label in y_train:
+            weight = max_count / class_counts[label]
+            weights.append(weight)
+        
+        weights = np.array(weights)
+        
+        # Normalize weights
+        weights = weights / weights.sum() * len(weights)
+        
+        sampler = WeightedRandomSampler(
+            weights=weights.tolist(),
+            num_samples=len(y_train),
+            replacement=True
+        )
+        
+        train_loader = DataLoader(
+            train_set,
+            batch_size=batch_size,
+            sampler=sampler,  # Use sampler instead of shuffle
+            collate_fn=collate_fn_spike,
+            num_workers=num_workers,
+            pin_memory=(num_workers > 0),
+            drop_last=True
+        )
+    else:
+        # Simple shuffle without weighting
+        train_loader = DataLoader(
+            train_set,
+            batch_size=batch_size,
+            shuffle=True,
+            collate_fn=collate_fn_spike,
+            num_workers=num_workers,
+            pin_memory=(num_workers > 0),
+            drop_last=True
+        )
+    
+    # Val and test loaders
+    val_loader = DataLoader(
+        val_set,
+        batch_size=batch_size,
+        shuffle=False,
+        collate_fn=collate_fn_spike,
+        num_workers=num_workers,
+        pin_memory=(num_workers > 0),
+        drop_last=False
+    )
+    
+    test_loader = DataLoader(
+        test_set,
+        batch_size=batch_size,
+        shuffle=False,
+        collate_fn=collate_fn_spike,
+        num_workers=num_workers,
+        pin_memory=(num_workers > 0),
+        drop_last=False
+    )
 
-    def _build_pair(self, a_path, v_path, win, hop, aligned, tag):
-        a_segs = self._audio_segments(a_path, win, hop)
-        limit = aligned if aligned else len(a_segs)
-        if self.max_segments:
-            limit = min(limit, self.max_segments)
-        v_segs = self._collect_video(v_path, win, hop, limit)
-        S = min(len(a_segs), len(v_segs), limit)
-        return a_segs[:S], v_segs[:S]
+    print(f"✅ DataLoaders created:")
+    print(f"   Train: {len(train_loader)} batches")
+    print(f"   Val: {len(val_loader)} batches")
+    print(f"   Test: {len(test_loader)} batches\n")
 
-    def __getitem__(self, idx: int) -> Dict[str, Any]:
-        r = self._read_row(idx)
-        a1p, v1p = r["audio_path1"], r["video_path1"]
-        a2p, v2p = r["audio_path2"], r["video_path2"]
-        y = int(r["label"])
-        w1, h1, s1 = self._get_params(r, 1)
-        w2, h2, s2 = self._get_params(r, 2)
-
-        a1_raw, v1_raw = self._build_pair(a1p, v1p, w1, h1, s1, f"idx{idx}-p1")
-        a2_raw, v2_raw = self._build_pair(a2p, v2p, w2, h2, s2, f"idx{idx}-p2")
-
-        return {
-            "a1_raw": a1_raw,
-            "v1_raw": v1_raw,
-            "a2_raw": a2_raw,
-            "v2_raw": v2_raw,
-            "label": y,
-            "meta": {"a1": a1p, "v1": v1p, "a2": a2p, "v2": v2p},
-        }
+    return train_loader, val_loader, test_loader
