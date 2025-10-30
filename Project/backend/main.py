@@ -9,12 +9,11 @@ import io
 from spikingjelly.activation_based import functional
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from huggingface_hub import logout
+from .api import register_routes
 
 # Import your efficient SpikeNet model
 from model import SpikeNetEfficient as SpikeNet
 
-
-from .api import register_routes
 
 # ---------------- FASTAPI SETUP ----------------
 app = FastAPI()
@@ -27,15 +26,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 register_routes(app)
-
-
-
-
-
-
-
 
 
 
