@@ -2,10 +2,6 @@ from pydantic import BaseModel, EmailStr, ConfigDict
 from typing import Optional
 from uuid import UUID
 
-class GoogleAuthRequest(BaseModel):
-    id_token: str
-
-
 class UserResponse(BaseModel):
     id: UUID
     email: EmailStr

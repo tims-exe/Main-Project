@@ -40,21 +40,12 @@ export const getCurrentUser = async () => {
     return response.json();
 };
 
-export const authenticateWithGoogle = async (idToken: string) => {
-    const response = await fetch(`${API_URL}/auth/google`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            id_token: idToken,
-        }),
-    });
-
+export const initiateGoogleLogin = async () => {
+    const response = await fetch(`${API_URL}/auth/google/login`);
+    
     if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Authentication failed');
+        throw new Error('Failed to initiate Google login');
     }
-
+    
     return response.json();
 };

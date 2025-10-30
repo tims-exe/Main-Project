@@ -30,13 +30,3 @@ export async function getServerSession(): Promise<{ user: User; token: string } 
         return null;
     }
 }
-
-export async function requireAuth(): Promise<{ user: User; token: string }> {
-    const session = await getServerSession();
-    
-    if (!session) {
-        throw new Error('Unauthorized');
-    }
-    
-    return session;
-}

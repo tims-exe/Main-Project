@@ -1,8 +1,5 @@
 import type { User } from '@/types/auth';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
-// Client-side functions
 export const isAuthenticated = (): boolean => {
     if (typeof window === 'undefined') return false;
     return !!getCookie('access_token');
@@ -20,9 +17,8 @@ export const getAccessToken = (): string | null => {
 };
 
 export const setAuthData = (token: string, user: User): void => {
-    // Set cookies instead of localStorage
-    setCookie('access_token', token, 7); // 7 days expiry
-    setCookie('user', JSON.stringify(user), 7);
+    setCookie('access_token', token, 7);
+    setCookie('user', encodeURIComponent(JSON.stringify(user)), 7);
 };
 
 export const clearAuthData = (): void => {
@@ -55,25 +51,4 @@ function getCookie(name: string): string | null {
 
 function deleteCookie(name: string) {
     document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/;`;
-}
-
-// Server-side function
-export async function getServerUser(token: string): Promise<User | null> {
-    try {
-        const response = await fetch(`${API_URL}/auth/me`, {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-            },
-            cache: 'no-store',
-        });
-
-        if (!response.ok) {
-            return null;
-        }
-
-        return await response.json();
-    } catch (error) {
-        console.error('Error fetching user:', error);
-        return null;
-    }
 }

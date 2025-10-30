@@ -19,7 +19,7 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
-    except:
+    finally:
         db.close()
 
 DbSession = Annotated[Session, Depends(get_db)]
