@@ -14,6 +14,8 @@ from huggingface_hub import logout
 from model import SpikeNetEfficient as SpikeNet
 
 
+from .api import register_routes
+
 # ---------------- FASTAPI SETUP ----------------
 app = FastAPI()
 
@@ -24,6 +26,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+register_routes(app)
+
+
+
+
+
+
+
+
 
 
 # ---------------- DATA MODELS ----------------
