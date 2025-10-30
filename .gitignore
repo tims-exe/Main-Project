@@ -1,24 +1,31 @@
+# logs
 persistent-terminals.log
-snn/multimodal-snn/data/*
-snn/multimodal-snn/src/data_pipeline_helper_functions/__pycache__/*
-snn/multimodal-snn/src/load_labels/__pycache__/*
-snn/multimodal-snn/src/model_training/__pycache__/*
-snn/multimodal-snn/src/feature_extraction/__pycache__/*
-snn/multimodal-snn/src/load_dataset/__pycache__/*
 
-snn/multimodal-snn/models/checkpoints/ 
-snn/multimodal-snn/model_state.pth 
-Project/backend/model_state.pth 
-snn/multimodal-snn/data/embedded_data/embeddings/ 
-snn/multimodal-snn/data/features/*.pkl 
-snn/multimodal-snn/checkpoints/*
-snn/multimodal-snn/checkpoints/best_model.pt
+# data and embeddings
+snn/multimodal-snn/data/**
+
+# caches
+**/__pycache__/
+
+# multimodal checkpoints / models
+snn/multimodal-snn/models/checkpoints/
+snn/multimodal-snn/checkpoints/
+snn/multimodal-snn/checkpoints_snn/
+
+# model files
+snn/multimodal-snn/model_state.pth
 snn/multimodal-snn/best_model.pth
-snn/multimodal-snn/checkpoints_snn/best_model.pt
-Project/backend/snn_best_model.pth
 snn/multimodal-snn/snn_best_model.pth
-snn/audio/src/load_labels/__pycache__/*
-snn/audio/src/data_pipeline_helper_functions/__pycache__/*
-snn/audio/src/feature_extraction/__pycache__/*
-snn/audio/src/load_dataset/__pycache__/*
-snn/audio/src/model_training/__pycache__/*
+
+# feature files
+snn/multimodal-snn/data/features/*.pkl
+
+# frontend node modules
+Project/frontend/node_modules/
+
+# backend model files
+Project/backend/model_state.pth
+Project/backend/snn_best_model.pth
+
+# audio-specific caches
+Project/backend/**/__pycache__/
