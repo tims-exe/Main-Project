@@ -50,6 +50,8 @@ async def google_callback(code: str, db: DbSession):
             "profile_picture": user.profile_picture
         }
         user_json = quote(json.dumps(user_data))
+
+        print(f"TOKEN : {access_token}")
         
         redirect_url = f"{FRONTEND_URL}/auth/callback?token={access_token}&user={user_json}"
         return RedirectResponse(url=redirect_url)
