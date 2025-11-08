@@ -19,4 +19,5 @@ class TokenResponse(BaseModel):
 
 
 class TokenData(BaseModel):
-    email: Optional[str] = None
+    email: str 
+    user_id: str

@@ -3,7 +3,7 @@ from fastapi.security import OAuth2PasswordBearer
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from ..database.core import DbSession
-from .models import TokenResponse, UserResponse
+from .models import TokenResponse, UserResponse, TokenData
 from . import services
 import os
 import json
@@ -35,11 +35,12 @@ async def google_callback(code: str, db: DbSession):
         google_user_info = services.exchange_code_for_token(code)
         user = services.get_user(db, google_user_info)
         
+        tokenData = TokenData(
+            email=user.email,
+            user_id=str(user.id)
+        )
         access_token = services.create_access_token(
-            data={
-                "sub": user.email,
-                "user_id": str(user.id)
-            }
+            data = tokenData
         )
         
         user_data = {
