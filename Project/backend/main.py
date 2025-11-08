@@ -11,13 +11,26 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from huggingface_hub import logout
 from .api import register_routes
 from .data.database import engine, Base
-
+from contextlib import asynccontextmanager
+from .data.redis_client import redis_client
 # Import your efficient SpikeNet model
 # from .model import SpikeNetEfficient as SpikeNet
 
 
 # ---------------- FASTAPI SETUP ----------------
-app = FastAPI()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    await redis_client.connect()
+    yield
+    # Shutdown
+    await redis_client.disconnect()
+
+
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

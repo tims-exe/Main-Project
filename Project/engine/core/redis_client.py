@@ -10,7 +10,7 @@ class RedisClient:
             db = db, 
             decode_responses= True
         )
-        self.last_id = "0"
+        self.last_id = "$"
 
     def read_stream(self, stream_name: str, block: int = 1000) -> list:
         try: 

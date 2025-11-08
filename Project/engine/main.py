@@ -1,8 +1,10 @@
-from .core.redis_client import RedisClient
+from core.redis_client import RedisClient
 
 def main():
+    print("\n=================================")
     print("Starting Senticore Engine...")
-    print("Reading from Queue")
+    print("===================================\n")
+    print("Reading from Queue\n")
 
     client = RedisClient()
     stream_name = "job"
@@ -15,7 +17,7 @@ def main():
                 print(f"{message_id} : {message_data}")
     
     except KeyboardInterrupt:
-        print("\nShutting down gracefully...")
+        print("\nShutting down...")
     
     finally:
         client.close()
