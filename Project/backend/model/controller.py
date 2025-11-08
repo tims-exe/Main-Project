@@ -8,7 +8,7 @@ model_router = APIRouter(
 )
 
 @model_router.get("/test")
-async def testing(payload = Depends(auth_middleware)):
+async def testing(payload:TokenData = Depends(auth_middleware)):
     
     
-    return {"message": "Access granted", "user": payload}
+    return {"message": "Access granted", "user": payload.email}

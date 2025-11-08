@@ -97,7 +97,7 @@ def get_user(db: Session, google_user_info: dict) -> User:
 # create jwt access token
 def create_access_token(data: TokenData) -> str:
     to_encode = {
-        "sub": data.email,
+        "email": data.email,
         "user_id": data.user_id
     }
     return jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
