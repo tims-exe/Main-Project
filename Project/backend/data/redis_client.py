@@ -1,5 +1,6 @@
 import os
 import json
+import asyncio
 from typing import Optional, Dict, Any
 import redis.asyncio as redis
 from redis.asyncio import Redis
@@ -9,6 +10,9 @@ class RedisClient:
     def __init__(self):
         self.client: Optional[Redis] = None
         self.redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+        self.responses: Dict[str, asyncio.Future] = {}
+        self._running = False
+        self._listener_task: Optional[asyncio.Task] = None
 
     async def connect(self):
         if self.client is None:
@@ -18,8 +22,21 @@ class RedisClient:
                 decode_responses=True
             )
             print(f"Connected to Redis at {self.redis_url}")
+            
+            # Start listener in background
+            self._running = True
+            self._listener_task = asyncio.create_task(self._listen_loop())
 
     async def disconnect(self):
+        self._running = False
+        
+        if self._listener_task:
+            self._listener_task.cancel()
+            try:
+                await self._listener_task
+            except asyncio.CancelledError:
+                pass
+        
         if self.client:
             await self.client.close()
             print("Disconnected from Redis")
@@ -36,49 +53,61 @@ class RedisClient:
         await self.client.xadd("job", message_data)
         print(f"Sent request to engine: {request_id}")
 
+    async def wait_for_response(self, request_id: str, timeout: float = 5.0) -> Dict[str, Any]:
+        # Create a future for this request
+        future = asyncio.Future()
+        self.responses[request_id] = future
+        
+        try:
+            # Wait for response with timeout
+            result = await asyncio.wait_for(future, timeout=timeout)
+            return result
+        except asyncio.TimeoutError:
+            # Clean up if timeout occurs
+            if request_id in self.responses:
+                del self.responses[request_id]
+            raise TimeoutError(f"No response received for request {request_id}")
 
-    # async def listen_loop(self):
+    async def _listen_loop(self):
+        last_id = "$"  
 
-    #     while self._running:
-    #         try:
-    #             response = await self.client.xread(
-    #                 streams = {"engine": "$"},
-    #                 block = 5000
-    #             )
+        while self._running:
+            try:
+                # Read from ack stream
+                response = await self.client.xread(
+                    streams={"ack": last_id},
+                    block=1000, 
+                    count=10
+                )
 
-    #             if not response:
-    #                 continue
+                if not response:
+                    continue
 
-    #             for stream_name, message in response:
-    #                 for message_id, message_data in message:
-    #                     if "engine_update" in message_data:
-    #                         await self.handle_engine_update(message_data["engine_update"])
+                # Process messages
+                for stream_name, messages in response:
+                    for message_id, message_data in messages:
+                        # Update last_id to continue from this point
+                        last_id = message_id
+                        
+                        # Get request_id from message
+                        request_id = message_data.get("request_id")
+                        
+                        if request_id and request_id in self.responses:
+                            future = self.responses[request_id]
+                            
+                            # Set the result if future is still pending
+                            if not future.done():
+                                future.set_result(message_data)
+                            
+                            # Clean up
+                            del self.responses[request_id]
 
-    #         except asyncio.CancelledError:
-    #             print("Redis listener Cancelled")
-    #             break 
-            
-    #         except Exception as e:
-    #             print(f"Error in Redis listener : {e}")
-    #             await asyncio.sleep(1)
-
-
-    
-    # async def handle_engine_update(self, engine_update_json: str) :
-    #     try:
-    #         data = json.loads(engine_update_json)
-    #         request_id = data.get("id")
-
-    #         if request_id and request_id in self.responses:
-    #             future = self.responses[request_id]
-    #             if not future.done():
-    #                 future.set_result(data)
-
-    #             del self.responses[request_id]
-
-    #     except json.JSONDecodeError as e:
-    #         print(f"Failed to parse engine update : {e}")
-
+            except asyncio.CancelledError:
+                print("Redis listener cancelled")
+                break
+            except Exception as e:
+                print(f"Error in Redis listener: {e}")
+                await asyncio.sleep(1)
 
 
 # Global instance

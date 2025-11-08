@@ -30,6 +30,18 @@ class RedisClient:
         except redis.RedisError as e:
             print(f"Redis error: {e}")
             return []
+        
+    def send_ack(self, request_id: str, message: str) -> None:
+        try:
+            self.client.xadd("ack", {
+                "request_id": request_id,
+                "message": message
+            })
+
+            print(f"Sent ACK: {message}")
+        
+        except redis.RedisError as e:
+            print(f"Error sending ACK: {e}")
     
     def close(self):
         self.client.close()

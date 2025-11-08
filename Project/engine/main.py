@@ -1,4 +1,4 @@
-from core.redis_client import RedisClient
+from data.redis_client import RedisClient
 
 def main():
     print("\n=================================")
@@ -15,6 +15,9 @@ def main():
 
             for message_id, message_data in messages:
                 print(f"{message_id} : {message_data}")
+
+                request_id = message_data.get("request_id", "unknown")
+                client.send_ack(request_id, f"Acknowledgement for {message_data}")
     
     except KeyboardInterrupt:
         print("\nShutting down...")
