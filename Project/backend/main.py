@@ -10,7 +10,7 @@ from spikingjelly.activation_based import functional
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from huggingface_hub import logout
 from .api import register_routes
-from .database.core import engine, Base
+from .data.database import engine, Base
 
 # Import your efficient SpikeNet model
 # from .model import SpikeNetEfficient as SpikeNet

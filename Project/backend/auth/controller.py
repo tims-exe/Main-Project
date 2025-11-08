@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Response
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
-from ..database.core import DbSession
+from ..data.database import DbSession
 from .models import TokenResponse, UserResponse, TokenData
 from . import services
 import os
