@@ -1,51 +1,58 @@
+import axios from 'axios';
 import { getAccessToken, clearAuthData } from './auth';
+import { ChatPostRequestType } from '@/types/auth';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-interface FetchOptions extends RequestInit {
-    headers?: Record<string, string>;
-}
-
-export const fetchWithAuth = async (endpoint: string, options: FetchOptions = {}) => {
-    const token = getAccessToken();
-    
-    const headers: Record<string, string> = {
+// Create Axios instance
+const api = axios.create({
+    baseURL: API_URL,
+    headers: {
         'Content-Type': 'application/json',
-        ...options.headers,
-    };
+    },
+});
 
+// Add Authorization header automatically
+api.interceptors.request.use((config) => {
+    const token = getAccessToken();
     if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
+        config.headers.Authorization = `Bearer ${token}`;
     }
+    return config;
+});
 
-    const response = await fetch(`${API_URL}${endpoint}`, {
-        ...options,
-        headers,
-    });
-
-    if (response.status === 401) {
-        clearAuthData();
-        window.location.href = '/login';
-        throw new Error('Unauthorized');
+// Handle unauthorized errors globally
+api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        if (error.response && error.response.status === 401) {
+            clearAuthData();
+            window.location.href = '/login';
+        }
+        return Promise.reject(error);
     }
+);
 
-    return response;
+// GET request with auth
+export const fetchWithAuth = async (endpoint: string) => {
+    return api.get(endpoint);
 };
 
+// POST request with auth and payload
+export const postChatWithAuth = async (endpoint: string, data: ChatPostRequestType) => {
+    return api.post(endpoint, data);
+};
+
+// Get current user
 export const getCurrentUser = async () => {
     const response = await fetchWithAuth('/auth/me');
-    if (!response.ok) {
-        throw new Error('Failed to fetch user');
-    }
-    return response.json();
+    return response.data;
 };
 
+// Initiate Google login
 export const initiateGoogleLogin = async () => {
-    const response = await fetch(`${API_URL}/auth/google/login`);
-    
-    if (!response.ok) {
-        throw new Error('Failed to initiate Google login');
-    }
-    
-    return response.json();
+    const response = await api.get('/auth/google/login');
+    return response.data;
 };
+
+export default api;

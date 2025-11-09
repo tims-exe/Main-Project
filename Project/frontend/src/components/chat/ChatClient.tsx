@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import AudioPlayer, { RHAP_UI } from "react-h5-audio-player";
 import "react-h5-audio-player/lib/styles.css";
 import axios from "axios";
+import { postChatWithAuth } from "@/lib/api";
 
 interface Message {
   id: number;
@@ -64,21 +65,26 @@ export default function ChatClient() {
     setIsLoading(true);
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/chat`, {
-        message: userMessage.text,
-      });
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: idCounter.current++,
-          sender: "bot",
-          text: response.data.response || "Ok",
-          time: new Date().toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-        },
-      ]);
+    //   const response = await axios.post(`${API_BASE_URL}/chat/text`, {
+    //     message: userMessage.text,
+    //   });
+      if (userMessage.text) {
+        const response = await postChatWithAuth("/chat/text", {
+            message: userMessage.text
+        })
+        setMessages((prev) => [
+            ...prev,
+            {
+            id: idCounter.current++,
+            sender: "bot",
+            text: response.data.message,
+            time: new Date().toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+            }),
+            },
+        ]);
+      }
     } catch {
       setMessages((prev) => [
         ...prev,
