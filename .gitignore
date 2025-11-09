@@ -30,6 +30,7 @@ Project/backend/snn_best_model.pth
 .env
 .python-version
 .venv
+.venv-engine
 best_model.pth
 
 # audio-specific caches

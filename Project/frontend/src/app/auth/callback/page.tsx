@@ -20,12 +20,14 @@ function CallbackContent() {
                 router.push('/login');
                 return;
             }
-
+            // console.log(searchParams)
+            // console.log(token)
+            // console.log(userParam)
             if (token && userParam) {
                 try {
                     const user = JSON.parse(decodeURIComponent(userParam));
                     setAuthData(token, user);
-                    router.push('/home');
+                    router.replace('/home');
                 } catch (error) {
                     console.error('Error parsing user data:', error);
                     router.push('/login');
