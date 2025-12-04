@@ -5,7 +5,7 @@ from ..middleware.auth_middleware import auth_middleware
 from ..auth.models import TokenData
 from ..data.redis_client import redis_client
 from .models import ChatRequest
-from pathlib import Path
+from .services import save_and_convert_audio
 
 chat_router = APIRouter(
     prefix='/chat',
@@ -52,15 +52,26 @@ async def text(req: ChatRequest, payload: TokenData = Depends(auth_middleware)):
 async def voice(audio: UploadFile = File(...), payload: TokenData = Depends(auth_middleware)):
     request_id = str(uuid.uuid4())
 
-    audio_bytes = await audio.read()
-    
     try:
-        print("audio recieved")
+        print("audio received")
 
-        # save audio file in temp bucket
-        bucket_dir = Path(__file__).resolve().parent.parent
+        mp3_path = save_and_convert_audio(
+            audio=audio,
+            user_id=payload.user_id,
+            request_id=request_id
+        )
 
-        print(bucket_dir)
+        return {
+            "message": mp3_path,
+            "request_id": request_id
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error processing audio: {str(e)}"
+        )
+
 
         # create job msg with audio id
 
@@ -69,18 +80,6 @@ async def voice(audio: UploadFile = File(...), payload: TokenData = Depends(auth
         # recieve ack text
 
         # return response
-
-        return {
-            "message": "got voice",
-            "request_id": request_id
-        } 
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error processing audio: {str(e)}"
-        )
-
 
 
 @chat_router.get("/test")
