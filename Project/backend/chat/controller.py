@@ -62,16 +62,12 @@ async def voice(audio: UploadFile = File(...), payload: TokenData = Depends(auth
             request_id=request_id
         )
 
-        print('AUDIO PATH = ', mp3_path)
-
         # job request
         job_message = {
             "user_id": payload.user_id,
             "type": "audio",
-            "message": str(mp3_path)
+            "message": mp3_path
         }
-
-        print("JOB : ", job_message)
 
         # send job 
         await redis_client.send_to_engine(
@@ -79,11 +75,7 @@ async def voice(audio: UploadFile = File(...), payload: TokenData = Depends(auth
             data=job_message
         )
 
-        print("JOB REQ SENT")
-
         ack_response = await redis_client.wait_for_response(request_id)
-
-        print("JOB REQ RECIEVED", ack_response)
 
         return {
             "message": ack_response.get("message"),
