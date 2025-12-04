@@ -43,6 +43,12 @@ export const postChatWithAuth = async (endpoint: string, data: ChatPostRequestTy
     return api.post(endpoint, data);
 };
 
+export const postFormWithAuth = async (endpoint: string, data: FormData) => {
+    return api.post(endpoint, data, {
+        headers: { "Content-Type": "multipart/form-data" }
+    });
+}
+
 // Get current user
 export const getCurrentUser = async () => {
     const response = await fetchWithAuth('/auth/me');

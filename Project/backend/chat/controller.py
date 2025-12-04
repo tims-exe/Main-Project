@@ -1,9 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
+
 import uuid
 from ..middleware.auth_middleware import auth_middleware
 from ..auth.models import TokenData
 from ..data.redis_client import redis_client
 from .models import ChatRequest
+from pathlib import Path
 
 chat_router = APIRouter(
     prefix='/chat',
@@ -44,6 +46,41 @@ async def text(req: ChatRequest, payload: TokenData = Depends(auth_middleware)):
             status_code=500,
             detail=f"Error processing request: {str(e)}"
         )
+    
+
+@chat_router.post("/voice")
+async def voice(audio: UploadFile = File(...), payload: TokenData = Depends(auth_middleware)):
+    request_id = str(uuid.uuid4())
+
+    audio_bytes = await audio.read()
+    
+    try:
+        print("audio recieved")
+
+        # save audio file in temp bucket
+        bucket_dir = Path(__file__).resolve().parent.parent
+
+        print(bucket_dir)
+
+        # create job msg with audio id
+
+        # send msg to queue
+
+        # recieve ack text
+
+        # return response
+
+        return {
+            "message": "got voice",
+            "request_id": request_id
+        } 
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error processing audio: {str(e)}"
+        )
+
 
 
 @chat_router.get("/test")

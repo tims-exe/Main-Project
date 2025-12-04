@@ -203,21 +203,21 @@ async def health():
 
 
 # 🎙️ Voice input — only emotion prediction
-@app.post("/api/voice", response_model=ChatResponse)
-async def voice(audio: UploadFile = File(...)):
-    audio_bytes = await audio.read()
-    try:
-        emotion, confidence = detect_emotion(audio_bytes)
-        print(f"Detected emotion: {emotion} (confidence: {confidence:.2f})")
+# @app.post("/api/voice", response_model=ChatResponse)
+# async def voice(audio: UploadFile = File(...)):
+#     audio_bytes = await audio.read()
+#     try:
+#         emotion, confidence = detect_emotion(audio_bytes)
+#         print(f"Detected emotion: {emotion} (confidence: {confidence:.2f})")
 
-        # Return only emotion prediction, no LLM
-        return ChatResponse(
-            response=f"Detected emotion: {emotion} (confidence: {confidence:.2f})",
-            emotion=emotion
-        )
-    except Exception as e:
-        print(f"Error processing voice input: {e}")
-        return ChatResponse(response="Error processing audio", emotion="Neutral")
+#         # Return only emotion prediction, no LLM
+#         return ChatResponse(
+#             response=f"Detected emotion: {emotion} (confidence: {confidence:.2f})",
+#             emotion=emotion
+#         )
+#     except Exception as e:
+#         print(f"Error processing voice input: {e}")
+#         return ChatResponse(response="Error processing audio", emotion="Neutral")
 
 
 # # Run with:

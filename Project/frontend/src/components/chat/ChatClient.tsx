@@ -3,8 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import AudioPlayer, { RHAP_UI } from "react-h5-audio-player";
 import "react-h5-audio-player/lib/styles.css";
-import axios from "axios";
-import { postChatWithAuth } from "@/lib/api";
+// import axios from "axios";
+import { postChatWithAuth, postFormWithAuth } from "@/lib/api";
 
 interface Message {
   id: number;
@@ -14,7 +14,7 @@ interface Message {
   time: string;
 }
 
-const API_BASE_URL = "http://127.0.0.1:8000";
+// const API_BASE_URL = "http://127.0.0.1:8000";
 
 export default function ChatClient() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -135,14 +135,17 @@ export default function ChatClient() {
 
       const formData = new FormData();
       formData.append("audio", audioBlob, "recording.webm");
-      const response = await axios.post(`${API_BASE_URL}/api/voice`, formData);
+
+      const response = await postFormWithAuth("/chat/voice", formData);
+
+      console.log("***************", response)
 
       setMessages((prev) => [
         ...prev,
         {
           id: idCounter.current++,
           sender: "bot",
-          text: response.data.response || "Ok",
+          text: response.data.message || "Ok",
           time: new Date().toLocaleTimeString([], {
             hour: "2-digit",
             minute: "2-digit",

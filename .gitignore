@@ -39,3 +39,6 @@ Project/backend/**/__pycache__/
 # data files
 snn/multimodal/data/**
 snn/multimodal/data_sorted/**
+
+
+/Project/temp
