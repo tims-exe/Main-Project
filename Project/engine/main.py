@@ -21,13 +21,21 @@ def main():
                         message_data["data"] = json.loads(message_data["data"])
 
                     request = RequestType(**message_data)
+                    data = request.data
 
+                    if data.type == "audio":
+                        ack = f"audio : {request.request_id}"
+                    elif data.type == "text":
+                        ack = f"text : {request.request_id} ({data.message})"
+                    else:
+                        ack = f"invalid request"
+                    
                     print("Request Received:", message_id)
                     print("User:", request.data.user_id)
                     print("Message:", request.data.message)
                     print()
 
-                    client.send_ack(request.request_id, f"Acknowledgement for {request.data.message}")
+                    client.send_ack(request.request_id, ack)
                     print("-"*40)
 
                 except Exception as e:
