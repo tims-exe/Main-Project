@@ -29,7 +29,7 @@ async def text(req: ChatRequest, payload: TokenData = Depends(auth_middleware)):
             data=job_message
         )
 
-        ack_response = await redis_client.wait_for_response(request_id, timeout=0.5)
+        ack_response = await redis_client.wait_for_response(request_id)
 
         return {
             "message": ack_response.get("message"),
@@ -55,14 +55,30 @@ async def voice(audio: UploadFile = File(...), payload: TokenData = Depends(auth
     try:
         print("audio received")
 
+        # save and convert the audio file from request
         mp3_path = save_and_convert_audio(
             audio=audio,
             user_id=payload.user_id,
             request_id=request_id
         )
 
+        # job request
+        job_message = {
+            "user_id": payload.user_id,
+            "type": "audio",
+            "message": mp3_path
+        }
+
+        # send job 
+        await redis_client.send_to_engine(
+            request_id=request_id,
+            data=job_message
+        )
+
+        ack_response = await redis_client.wait_for_response(request_id)
+
         return {
-            "message": mp3_path,
+            "message": ack_response,
             "request_id": request_id
         }
 
