@@ -13,7 +13,7 @@ from pydantic import BaseModel
 class RequestData(BaseModel):
     user_id: str
     type: str
-    message: str
+    data: str
 
 
 class RequestType(BaseModel):

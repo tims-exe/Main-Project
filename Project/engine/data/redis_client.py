@@ -42,6 +42,14 @@ class RedisClient:
         
         except redis.RedisError as e:
             print(f"Error sending ACK: {e}")
+
+    def clear_stream(self, stream_name: str) -> None:
+        try:
+            self.client.delete(stream_name)
+            self.last_id = "$"
+            print(f"Cleared stream: {stream_name}")
+        except redis.RedisError as e:
+            print(f"Error clearing stream {stream_name}: {e}")
     
     def close(self):
         self.client.close()

@@ -37,4 +37,6 @@ def save_and_convert_audio(audio: UploadFile, user_id: str, request_id: str) -> 
     # delete original .webm file
     file_path.unlink(missing_ok=True)
 
+    print("audio converted")
+
     return mp3_path

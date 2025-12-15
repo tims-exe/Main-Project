@@ -11,6 +11,8 @@ def main():
     client = RedisClient()
     stream_name = "job"
 
+    client.clear_stream(stream_name)
+
     try:
         while True:
             messages = client.read_stream(stream_name)
@@ -26,13 +28,13 @@ def main():
                     if data.type == "audio":
                         ack = f"audio : {request.request_id}"
                     elif data.type == "text":
-                        ack = f"text : {request.request_id} ({data.message})"
+                        ack = f"text : {request.request_id} ({data.data})"
                     else:
                         ack = f"invalid request"
                     
                     print("Request Received:", message_id)
                     print("User:", request.data.user_id)
-                    print("Message:", request.data.message)
+                    print("Message:", request.data.data)
                     print()
 
                     client.send_ack(request.request_id, ack)

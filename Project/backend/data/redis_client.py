@@ -4,7 +4,8 @@ import asyncio
 from typing import Optional, Dict, Any
 import redis.asyncio as redis
 from redis.asyncio import Redis
-
+from pydantic import BaseModel
+from ..chat.models import JobMsgType
 
 class RedisClient:
     def __init__(self):
@@ -41,17 +42,18 @@ class RedisClient:
             await self.client.close()
             print("Disconnected from Redis")
 
-    async def send_to_engine(self, request_id: str, data: Dict[str, Any]) -> None:
+    async def send_to_engine(self, request_id: str, data: JobMsgType) -> None:
         if not self.client:
             raise RuntimeError("Redis client not connected")
 
         message_data = {
             "request_id": request_id,
-            "data": json.dumps(data)
+            "data": data.model_dump_json()  # ✅ FIX
         }
 
         await self.client.xadd("job", message_data)
         print(f"Sent request to engine: {request_id}")
+
 
     async def wait_for_response(self, request_id: str, timeout: float = 5.0) -> Dict[str, Any]:
         # Create a future for this request

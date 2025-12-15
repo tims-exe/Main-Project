@@ -4,8 +4,10 @@ import uuid
 from ..middleware.auth_middleware import auth_middleware
 from ..auth.models import TokenData
 from ..data.redis_client import redis_client
-from .models import ChatRequest
+from .models import ChatRequest, JobMsgType
 from .services import save_and_convert_audio
+from pydantic import BaseModel
+from enum import Enum
 
 chat_router = APIRouter(
     prefix='/chat',
@@ -18,11 +20,13 @@ async def text(req: ChatRequest, payload: TokenData = Depends(auth_middleware)):
     request_id = str(uuid.uuid4())
 
     try:
-        job_message = {
-            "user_id": payload.user_id,
-            "type": "text",
-            "message": req.message
-        }
+        job_message = JobMsgType(
+            user_id=payload.user_id,
+            type="text",
+            data=req.message
+        )
+
+        print(job_message)
 
         await redis_client.send_to_engine(
             request_id=request_id,
@@ -62,19 +66,18 @@ async def voice(audio: UploadFile = File(...), payload: TokenData = Depends(auth
             request_id=request_id
         )
 
-        # job request
-        job_message = {
-            "user_id": payload.user_id,
-            "type": "audio",
-            "message": mp3_path
-        }
+        job_message = JobMsgType(
+            user_id=payload.user_id,
+            type="audio",
+            data=request_id
+        )
 
         # send job 
         await redis_client.send_to_engine(
             request_id=request_id,
             data=job_message
         )
-
+        print("sent job", job_message)
         ack_response = await redis_client.wait_for_response(request_id)
 
         return {
@@ -87,15 +90,6 @@ async def voice(audio: UploadFile = File(...), payload: TokenData = Depends(auth
             status_code=500,
             detail=f"Error processing audio: {str(e)}"
         )
-
-
-        # create job msg with audio id
-
-        # send msg to queue
-
-        # recieve ack text
-
-        # return response
 
 
 @chat_router.get("/test")
