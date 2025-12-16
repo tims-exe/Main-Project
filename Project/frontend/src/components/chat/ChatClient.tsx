@@ -26,6 +26,7 @@ export default function ChatClient() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const idCounter = useRef(1);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const initialMessage: Message = {
@@ -39,6 +40,11 @@ export default function ChatClient() {
     };
     setMessages([initialMessage]);
   }, []);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({
@@ -100,6 +106,9 @@ export default function ChatClient() {
       ]);
     } finally {
       setIsLoading(false);
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+      });
     }
   };
 
@@ -154,6 +163,11 @@ export default function ChatClient() {
       ]);
 
       stream.getTracks().forEach((t) => t.stop());
+
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+      });
+
     };
 
     mediaRecorder.start();
@@ -195,7 +209,7 @@ export default function ChatClient() {
                   style={{ animationDelay: `${index * 0.02}s` }}
                 >
                   <div className="flex flex-col space-y-1 max-w-lg items-end">
-                    <div className="bg-gradient-to-br from-blue-400 to-purple-500 rounded-2xl rounded-tr-sm px-4 py-3 shadow-sm">
+                    <div className="bg-purple-500 rounded-2xl rounded-tr-sm px-4 py-3 shadow-sm">
                       {message.text ? (
                         <p className="text-sm text-white">{message.text}</p>
                       ) : message.audioUrl ? (
@@ -221,7 +235,7 @@ export default function ChatClient() {
                       {message.time}
                     </span>
                   </div>
-                  <div className="w-8 h-8 bg-blue-400 rounded-full flex-shrink-0"></div>
+                  <div className="w-8 h-8 bg-zinc-400 rounded-full flex-shrink-0"></div>
                 </div>
               )
             )}
@@ -253,6 +267,7 @@ export default function ChatClient() {
         <div className="flex-shrink-0 px-6 py-4 border-t border-gray-100 bg-gray-50/50">
           <div className="flex items-center space-x-3 bg-white rounded-2xl border border-gray-200 px-4 py-3 shadow-sm hover:shadow-md transition-shadow">
             <input
+              ref={inputRef}
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -264,7 +279,7 @@ export default function ChatClient() {
             <button
               onClick={handleSend}
               disabled={isLoading || !input.trim()}
-              className="px-4 py-2 bg-gradient-to-r from-blue-400 to-purple-500 text-white rounded-xl font-medium hover:shadow-lg active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 bg-purple-500 text-white rounded-xl font-medium hover:shadow-lg active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <svg
                 className="w-5 h-5"
@@ -291,8 +306,8 @@ export default function ChatClient() {
           disabled={isLoading}
           className={`w-24 h-24 rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed ${
             isRecording
-              ? "bg-gradient-to-br from-red-400 to-red-500 animate-pulse"
-              : "bg-gradient-to-br from-blue-400 to-purple-500"
+              ? "bg-red-400 animate-pulse"
+              : "bg-purple-500"
           }`}
         >
           {isRecording ? (
