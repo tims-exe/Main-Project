@@ -6,7 +6,7 @@ export default function LogoutButton() {
     return (
         <button
             onClick={logout}
-            className="border-2 border-red-400 text-red-400 rounded hover:bg-red-400 hover:text-white hover:cursor-pointer transition-colors h-[40px] px-3"
+            className="rounded bg-red-400 text-white hover:cursor-pointer transition-colors h-[40px] px-3 hover:bg-red-700"
         >
             Logout
         </button>

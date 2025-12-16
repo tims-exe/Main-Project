@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "@/lib/server-auth";
 import LogoutButton from "@/components/ui/button/LogoutButton";
 import ChatButton from "@/components/ui/button/ChatButton";
+import Conversations from "@/components/chat/Conversations";
 
 export default async function Home() {
   const session = await getServerSession();
@@ -13,26 +14,35 @@ export default async function Home() {
   const { user } = session;
 
   return (
-    <div className="h-screen flex flex-col justify-between p-10">
-      <div className="flex justify-between w-full">
-        <p className="font-semibold text-2xl">Home Page</p>
+    <div className="h-screen flex flex-col">
+      {/* Header */}
+      <header className="flex justify-between items-center px-8 py-6 border-b">
+        <h1 className="text-2xl font-semibold">Conversations</h1>
+
         <div className="flex items-center gap-4">
-          <div className="text-end">
-            <p className="font-semibold text-xl">
+          <div className="text-right">
+            <p className="font-semibold">
               {user.first_name} {user.last_name}
             </p>
-            <p>{user.email}</p>
+            <p className="text-sm text-muted-foreground">{user.email}</p>
           </div>
           <LogoutButton />
         </div>
-      </div>
+      </header>
 
-      <div className="flex justify-center items-center flex-1">
+      {/* Conversations list */}
+      <main className="flex-1 overflow-y-auto px-8 py-6">
+        <Conversations />
+      </main>
+
+      {/* Bottom center chat button */}
+      <div className="pb-6 flex justify-center">
         <ChatButton />
       </div>
     </div>
   );
 }
+
 
 {
   /* <div className="p-8">

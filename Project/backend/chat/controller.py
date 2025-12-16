@@ -1,9 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
+
 import uuid
 from ..middleware.auth_middleware import auth_middleware
 from ..auth.models import TokenData
 from ..data.redis_client import redis_client
-from .models import ChatRequest
+from .models import ChatRequest, JobMsgType
+from .services import save_and_convert_audio
+from pydantic import BaseModel
 
 chat_router = APIRouter(
     prefix='/chat',
@@ -15,35 +18,50 @@ chat_router = APIRouter(
 async def text(req: ChatRequest, payload: TokenData = Depends(auth_middleware)):
     request_id = str(uuid.uuid4())
 
-    try:
-        job_message = {
-            "user_id": payload.user_id,
-            "type": "text",
-            "message": req.message
-        }
+    job_message = JobMsgType(
+        user_id=payload.user_id,
+        type="text",
+        data=req.message
+    )
 
-        await redis_client.send_to_engine(
-            request_id=request_id,
-            data=job_message
-        )
+    await redis_client.send_to_engine(request_id, job_message)
 
-        ack_response = await redis_client.wait_for_response(request_id, timeout=0.5)
+    response = await redis_client.wait_for_response(request_id)
 
-        return {
-            "message": ack_response.get("message"),
-            "request_id": request_id
-        }
+    return {
+        "message": response.get("message"),
+        "request_id": request_id
+    }
 
-    except TimeoutError:
-        raise HTTPException(
-            status_code=408,
-            detail="Request Timeout"
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error processing request: {str(e)}"
-        )
+    
+
+@chat_router.post("/voice")
+async def voice(audio: UploadFile = File(...), payload: TokenData = Depends(auth_middleware) ):
+    request_id = str(uuid.uuid4())
+
+    mp3_path = save_and_convert_audio(
+        audio=audio,
+        user_id=payload.user_id,
+        request_id=request_id
+    )
+
+    job_message = JobMsgType(
+        user_id=payload.user_id,
+        type="audio",
+        data=request_id
+    )
+
+    await redis_client.send_to_engine(request_id, job_message)
+
+    response = await redis_client.wait_for_response(request_id)
+
+    print(response)
+
+    return {
+        "message": response.get("message"),
+        "request_id": request_id
+    }
+
 
 
 @chat_router.get("/test")
