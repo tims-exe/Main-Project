@@ -17,16 +17,17 @@ chat_router = APIRouter(
 # Conversation endpoints
 @chat_router.post("")
 async def create_new_conversation(
-    conversation: ConversationCreate,
     db: DbSession,
     payload: TokenData = Depends(auth_middleware)
 ):
-    """Create a new conversation"""
+    """
+    Create a new conversation.
+    Title is auto-generated as Chat1, Chat2, ...
+    """
     try:
         new_conversation = services.create_conversation(
             db=db,
-            user_id=payload.user_id,
-            title=conversation.title
+            user_id=payload.user_id
         )
         return {
             "id": str(new_conversation.id),
@@ -34,7 +35,11 @@ async def create_new_conversation(
             "created_at": new_conversation.created_at
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error creating conversation: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error creating conversation: {str(e)}"
+        )
+
     
 
 @chat_router.get("")

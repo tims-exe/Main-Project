@@ -153,9 +153,9 @@ export const getCurrentUser = async (): Promise<AxiosResponse<User>> => {
 };
 
 // Initiate Google login
-export const initiateGoogleLogin = async (): Promise<AxiosResponse<{ url: string }>> => {
-    const response = await api.get<{ url: string }>('/auth/google/login');
-    return response;
+export const initiateGoogleLogin = async () => {
+    const response = await api.get('/auth/google/login');
+    return response.data;
 };
 
 export default api;

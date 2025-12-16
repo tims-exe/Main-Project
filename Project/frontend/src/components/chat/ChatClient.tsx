@@ -57,18 +57,6 @@ export default function ChatClient() {
         );
 
         setMessages(normalizedMessages);
-
-        if (response.data.messages.length > 0) {
-          const firstUserMsg = response.data.messages.find(
-            (m: Message) => m.sender === "USER"
-          );
-          if (firstUserMsg && firstUserMsg.message_type === "TEXT") {
-            const title =
-              firstUserMsg.message.substring(0, 30) +
-              (firstUserMsg.message.length > 30 ? "..." : "");
-            setConversationTitle(title);
-          }
-        }
         setError(null);
       } catch (err) {
         const error = err as AxiosError;
@@ -164,14 +152,6 @@ export default function ChatClient() {
         const filtered = prev.filter((m) => m.id !== tempUserMsg.id);
         return [...filtered, userMsg, aiMsg];
       });
-
-      if (messages.length === 0) {
-        const title =
-          tempUserMsg.message.substring(0, 30) +
-          (tempUserMsg.message.length > 30 ? "..." : "");
-        setConversationTitle(title);
-        await updateConversationTitle(chatId, title);
-      }
 
       setError(null);
     } catch (err) {

@@ -13,14 +13,33 @@ from typing import Optional, List
 from ..data.database import DbSession
 from ..entities.conversation import Conversation
 from ..entities.message import Message, SenderType, MessageType
+from sqlalchemy import func
 
 
-def create_conversation(db: DbSession, user_id: uuid.UUID, title: Optional[str] = None) -> Conversation:
-    """Create a new conversation for a user"""
+def create_conversation(
+    db: DbSession,
+    user_id: uuid.UUID
+) -> Conversation:
+    """
+    Create a new conversation with auto-incremented title:
+    Chat1, Chat2, Chat3, ...
+    (per user)
+    """
+
+    # Count existing conversations for this user
+    count_stmt = select(func.count(Conversation.id)).where(
+        Conversation.user_id == user_id
+    )
+    conversation_count = db.execute(count_stmt).scalar() or 0
+
+    # Generate title
+    title = f"Chat{conversation_count + 1}"
+
     conversation = Conversation(
         user_id=user_id,
-        title=title or "New Conversation"
+        title=title
     )
+
     db.add(conversation)
     db.commit()
     db.refresh(conversation)
