@@ -7,7 +7,6 @@ from ..data.redis_client import redis_client
 from .models import ChatRequest, JobMsgType
 from .services import save_and_convert_audio
 from pydantic import BaseModel
-from enum import Enum
 
 chat_router = APIRouter(
     prefix='/chat',
@@ -19,77 +18,50 @@ chat_router = APIRouter(
 async def text(req: ChatRequest, payload: TokenData = Depends(auth_middleware)):
     request_id = str(uuid.uuid4())
 
-    try:
-        job_message = JobMsgType(
-            user_id=payload.user_id,
-            type="text",
-            data=req.message
-        )
+    job_message = JobMsgType(
+        user_id=payload.user_id,
+        type="text",
+        data=req.message
+    )
 
-        print(job_message)
+    await redis_client.send_to_engine(request_id, job_message)
 
-        await redis_client.send_to_engine(
-            request_id=request_id,
-            data=job_message
-        )
+    response = await redis_client.wait_for_response(request_id)
 
-        ack_response = await redis_client.wait_for_response(request_id)
+    return {
+        "message": response.get("message"),
+        "request_id": request_id
+    }
 
-        return {
-            "message": ack_response.get("message"),
-            "request_id": request_id
-        }
-
-    except TimeoutError:
-        raise HTTPException(
-            status_code=408,
-            detail="Request Timeout"
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error processing request: {str(e)}"
-        )
     
 
 @chat_router.post("/voice")
-async def voice(audio: UploadFile = File(...), payload: TokenData = Depends(auth_middleware)):
+async def voice(audio: UploadFile = File(...), payload: TokenData = Depends(auth_middleware) ):
     request_id = str(uuid.uuid4())
 
-    try:
-        print("audio received")
+    mp3_path = save_and_convert_audio(
+        audio=audio,
+        user_id=payload.user_id,
+        request_id=request_id
+    )
 
-        # save and convert the audio file from request
-        mp3_path = save_and_convert_audio(
-            audio=audio,
-            user_id=payload.user_id,
-            request_id=request_id
-        )
+    job_message = JobMsgType(
+        user_id=payload.user_id,
+        type="audio",
+        data=request_id
+    )
 
-        job_message = JobMsgType(
-            user_id=payload.user_id,
-            type="audio",
-            data=request_id
-        )
+    await redis_client.send_to_engine(request_id, job_message)
 
-        # send job 
-        await redis_client.send_to_engine(
-            request_id=request_id,
-            data=job_message
-        )
-        print("sent job", job_message)
-        ack_response = await redis_client.wait_for_response(request_id)
+    response = await redis_client.wait_for_response(request_id)
 
-        return {
-            "message": ack_response.get("message"),
-            "request_id": request_id
-        }
+    print(response)
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error processing audio: {str(e)}"
-        )
+    return {
+        "message": response.get("message"),
+        "request_id": request_id
+    }
+
 
 
 @chat_router.get("/test")
