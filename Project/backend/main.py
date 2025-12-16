@@ -3,7 +3,7 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
-
+from .data.database import engine, Base
 from .api import register_routes
 from .data.redis_client import redis_client
 
@@ -28,6 +28,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Base.metadata.create_all(bind=engine)
 
 
 # global exception handlers
