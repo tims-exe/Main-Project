@@ -4,15 +4,15 @@ import { getServerSession } from "@/lib/server-auth";
 import { redirect } from "next/navigation";
 
 export default async function Chat() {
-  const session = await getServerSession()
+  const session = await getServerSession();
 
   if (!session) {
-    redirect("/login")
+    redirect("/login");
   }
 
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-gray-50 via-blue-100/10 to-gray-100">
-      <Navbar />
+      <Navbar user={session.user} showClose />
 
       <main className="flex-1 overflow-hidden px-4 sm:px-6 lg:px-8 py-6">
         <div className="h-full max-w-7xl mx-auto">
@@ -24,5 +24,5 @@ export default async function Chat() {
         </div>
       </main>
     </div>
-  )
+  );
 }
