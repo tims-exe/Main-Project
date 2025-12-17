@@ -7,7 +7,6 @@ static_router = APIRouter()
 @static_router.get("/temp/{filename}")
 async def get_audio_file(filename: str):
     """Serve audio files from temp directory"""
-    print("**********************")
     # Validate filename to prevent directory traversal
     if ".." in filename or "/" in filename or "\\" in filename:
         raise HTTPException(status_code=400, detail="Invalid filename")

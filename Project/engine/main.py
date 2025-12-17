@@ -5,6 +5,8 @@ import os
 from groq import Groq
 from dotenv import load_dotenv
 
+from utils.whisper_transcriber import transcribe_audio 
+
 # Load environment variables from .env file
 load_dotenv()
 
@@ -20,7 +22,6 @@ def analyze_sentiment(text):
     Returns a short response message.
     """
     try:
-        # Create chat completion with Groq
         chat_completion = groq_client.chat.completions.create(
             messages=[
                 {
@@ -37,15 +38,13 @@ def analyze_sentiment(text):
                     "content": text
                 }
             ],
-            model="llama-3.1-8b-instant",  # Fast and efficient model
+            model="llama-3.1-8b-instant",
             temperature=0.7,
-            max_tokens=100  # Keep responses short
+            max_tokens=100
         )
-        
-        # Extract the response
-        response = chat_completion.choices[0].message.content
-        return response
-    
+
+        return chat_completion.choices[0].message.content
+
     except Exception as e:
         print(f"Error calling Groq API: {e}")
         return "I'm having trouble analyzing that right now. Please try again."
@@ -57,8 +56,6 @@ def main():
     print("=================================\n")
 
     client = RedisClient()
-
-    # Clear job stream on startup
     client.clear_stream(JOB_STREAM)
 
     try:
@@ -67,29 +64,38 @@ def main():
 
             for message_id, message_data in messages:
                 try:
-                    # Parse JSON payload
                     if isinstance(message_data.get("data"), str):
                         message_data["data"] = json.loads(message_data["data"])
 
                     request = RequestType(**message_data)
                     data = request.data
 
-                    # Process request
                     if data.type == "audio":
+                        # 🎧 Transcribe audio locally using Whisper
+                        transcribed_text = transcribe_audio(data.data)
+
+                        print("**************************")
+                        print(transcribed_text)
+
+                        # 🧠 Send transcription to Groq
+                        ai_response = analyze_sentiment(transcribed_text)
+
                         response = {
                             "request_id": request.request_id,
                             "type": "audio",
-                            "message": "processed"
+                            "transcription": transcribed_text, 
+                            "message": ai_response
                         }
+
                     elif data.type == "text":
-                        # Use Groq API to analyze sentiment
                         ai_response = analyze_sentiment(data.data)
-                        
+
                         response = {
                             "request_id": request.request_id,
                             "type": "text",
                             "message": ai_response
                         }
+
                     else:
                         response = {
                             "request_id": request.request_id,
@@ -102,7 +108,6 @@ def main():
                     print("AI Response:", response.get("message", "N/A"))
                     print("-" * 40)
 
-                    # Publish response via Pub/Sub
                     client.publish_ack(ACK_CHANNEL, response)
 
                 except Exception as e:

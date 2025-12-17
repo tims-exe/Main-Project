@@ -247,7 +247,7 @@ async def send_audio_message(
         job_message = JobMsgType(
             user_id=payload.user_id,
             type="audio",
-            data=request_id
+            data=mp3_filename.name
         )
         
 
@@ -295,7 +295,7 @@ async def testing(payload: TokenData = Depends(auth_middleware)):
             data={"email": payload.email}
         )
         
-        ack_response = await redis_client.wait_for_response(request_id, timeout=5.0)
+        ack_response = await redis_client.wait_for_response(request_id, timeout=10.0)
         
         return {
             "message": ack_response.get("message"),
