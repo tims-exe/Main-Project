@@ -15,9 +15,7 @@ export default function ConversationCard({
 }: ConversationCardProps) {
   const handleDelete = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
-    if (confirm("Delete this conversation?")) {
-      onDelete(id);
-    }
+    onDelete(id);
   };
 
   return (
