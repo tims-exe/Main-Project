@@ -56,7 +56,7 @@ class RedisClient:
         await self.client.xadd("job", payload)
         print(f"Sent job → stream: {request_id}")
 
-    async def wait_for_response(self, request_id: str, timeout: float = 5.0 ) -> Dict[str, Any]:
+    async def wait_for_response(self, request_id: str, timeout: float = 300 ) -> Dict[str, Any]:
         future = asyncio.get_running_loop().create_future()
         self.responses[request_id] = future
 

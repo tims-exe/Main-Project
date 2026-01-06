@@ -1,11 +1,12 @@
 from data.redis_client import RedisClient
-from models.requests import RequestType
+from schemas.requests import RequestType
 import json
 import os
 from groq import Groq
 from dotenv import load_dotenv
-
+from snn.emotion_infer import infer_emotion
 from utils.whisper_transcriber import transcribe_audio 
+from utils.resolve_audio_path import resolve_audio_path
 
 # Load environment variables from .env file
 load_dotenv()
@@ -71,21 +72,27 @@ def main():
                     data = request.data
 
                     if data.type == "audio":
-                        # 🎧 Transcribe audio locally using Whisper
                         transcribed_text = transcribe_audio(data.data)
 
-                        print("**************************")
-                        print(transcribed_text)
+                        audio_path = resolve_audio_path(data.data)
 
-                        # 🧠 Send transcription to Groq
+                        emotion_result = infer_emotion(audio_path)
+
+                        emotion = emotion_result["prediction"]
+                        probs = emotion_result["probabilities"]
+
                         ai_response = analyze_sentiment(transcribed_text)
 
                         response = {
                             "request_id": request.request_id,
                             "type": "audio",
-                            "transcription": transcribed_text, 
-                            "message": ai_response
+                            "transcription": transcribed_text,
+                            "emotion": emotion,
+                            "probabilities": probs,
+                            "message": f"[{emotion}] {ai_response}"
                         }
+
+
 
                     elif data.type == "text":
                         ai_response = analyze_sentiment(data.data)
