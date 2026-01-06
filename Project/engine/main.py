@@ -89,7 +89,7 @@ def main():
                             "transcription": transcribed_text,
                             "emotion": emotion,
                             "probabilities": probs,
-                            "message": f"[{emotion}] {ai_response}"
+                            "message": f"{ai_response}"
                         }
 
 

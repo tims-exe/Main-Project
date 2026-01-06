@@ -269,7 +269,8 @@ async def send_audio_message(
             "user_message": {
                 "id": str(user_message.id),
                 "audio_filename": user_message.message,
-                "transcribed_message": user_message.transcription,  # Return saved transcription
+                "transcribed_message": user_message.transcription,
+                "emotion": response.get("emotion"),  
                 "created_at": user_message.created_at,
             },
             "ai_message": {

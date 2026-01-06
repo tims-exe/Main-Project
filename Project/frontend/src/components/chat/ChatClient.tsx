@@ -17,6 +17,7 @@ import { AxiosError } from "axios";
 interface DisplayMessage extends Omit<Message, "id"> {
   id: string;
   transcription?: string;
+  emotion?: string;
 }
 
 export default function ChatClient() {
@@ -223,10 +224,10 @@ export default function ChatClient() {
             sender: "USER",
             message_type: "AUDIO",
             message: getAudioUrl(filename),
-            transcription: response.data.user_message.transcribed_message, // Get transcription from response
+            transcription: response.data.user_message.transcribed_message,
+            emotion: response.data.user_message.emotion,
             created_at: response.data.user_message.created_at,
           };
-
           const aiMsg = convertMessageResponseToDisplay(
             response.data.ai_message,
             "AI",
@@ -389,36 +390,49 @@ export default function ChatClient() {
                   style={{ animationDelay: `${index * 0.02}s` }}
                 >
                   <div className="flex flex-col space-y-1 max-w-lg items-end">
-                    <div className="bg-purple-500 rounded-2xl rounded-tr-sm px-4 py-3 shadow-sm">
-                      {message.message_type === "TEXT" ? (
-                        <p className="text-sm text-white">{message.message}</p>
-                      ) : (
-                        <div className="space-y-2">
-                          <div className="audio-player-wrapper">
-                            <AudioPlayer
-                              src={message.message}
-                              layout="horizontal-reverse"
-                              showJumpControls={false}
-                              customProgressBarSection={[RHAP_UI.PROGRESS_BAR]}
-                              customControlsSection={[
-                                RHAP_UI.MAIN_CONTROLS,
-                                RHAP_UI.DURATION,
-                              ]}
-                              customAdditionalControls={[]}
-                              customVolumeControls={[]}
-                              autoPlayAfterSrcChange={false}
-                              className="voice-message-player"
-                            />
-                          </div>
-
-                          {message.transcription && (
-                            <p className="text-xs text-purple-100 italic leading-snug">
-                              {message.transcription}
-                            </p>
-                          )}
-                        </div>
+                    <div className="flex flex-col items-end space-y-1">
+                      {message.emotion && (
+                        <span className="text-xs font-bold text-purple-600 mr-2">
+                          {message.emotion}
+                        </span>
                       )}
+
+                      <div className="bg-purple-500 rounded-2xl rounded-tr-sm px-4 py-3 shadow-sm">
+                        {message.message_type === "TEXT" ? (
+                          <p className="text-sm text-white">
+                            {message.message}
+                          </p>
+                        ) : (
+                          <div className="space-y-2">
+                            <div className="audio-player-wrapper">
+                              <AudioPlayer
+                                src={message.message}
+                                layout="horizontal-reverse"
+                                showJumpControls={false}
+                                customProgressBarSection={[
+                                  RHAP_UI.PROGRESS_BAR,
+                                ]}
+                                customControlsSection={[
+                                  RHAP_UI.MAIN_CONTROLS,
+                                  RHAP_UI.DURATION,
+                                ]}
+                                customAdditionalControls={[]}
+                                customVolumeControls={[]}
+                                autoPlayAfterSrcChange={false}
+                                className="voice-message-player"
+                              />
+                            </div>
+
+                            {message.transcription && (
+                              <p className="text-xs text-purple-100 italic leading-snug">
+                                {message.transcription}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
+
                     <span className="text-xs text-gray-400 mr-2">
                       {new Date(message.created_at).toLocaleTimeString([], {
                         hour: "2-digit",

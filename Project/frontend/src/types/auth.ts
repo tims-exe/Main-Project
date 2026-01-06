@@ -56,6 +56,7 @@ export interface MessageResponse {
   audio_filename?: string;
   created_at: string;
   transcribed_message?: string;
+  emotion?: string;
 }
 
 export interface TextMessageResponse {
