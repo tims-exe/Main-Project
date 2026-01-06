@@ -1,15 +1,24 @@
+import os
 import torch
 import torch.nn.functional as F
 import librosa
 import numpy as np
-import os
 
 from .modules.SpikEmo_Model import SpikEmo
 from .modules.spikformer import Spikformer
 
-# ---------------- CONFIG (must match training) ----------------
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# ============================================================
+# DEVICE
+# ============================================================
+if torch.cuda.is_available():
+    DEVICE = torch.device("cuda:0")
+    torch.backends.cudnn.benchmark = True
+else:
+    DEVICE = torch.device("cpu")
 
+# ============================================================
+# MODEL CONFIG (MUST MATCH TRAINING)
+# ============================================================
 DATASET = "IEMOCAP"
 N_CLASSES = 6
 N_SPEAKERS = 2
@@ -39,16 +48,24 @@ MULTI_ATTN = True
 LISTENER_STATE = True
 CONTEXT_ATTENTION = True
 
+# ============================================================
+# IMPORTANT: FIXED SEQUENCE LENGTH FOR SNN
+# ============================================================
+MAX_AUDIO_LEN = 300   # must be <= what was used in training
+
+# ============================================================
+# PATHS
+# ============================================================
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+
 CHECKPOINT_PATH = os.path.join(
     CURRENT_DIR,
     "spikemo_best_IEMOCAP.pt"
 )
 
-print("Loading checkpoint from:", CHECKPOINT_PATH)
-print("Exists:", os.path.exists(CHECKPOINT_PATH))
-
-
+# ============================================================
+# LABEL MAP
+# ============================================================
 LABEL_MAP = {
     0: "happiness",
     1: "sadness",
@@ -58,17 +75,24 @@ LABEL_MAP = {
     5: "frustration"
 }
 
-# ---------------- Audio Feature Extraction ----------------
+# ============================================================
+# AUDIO FEATURE EXTRACTION
+# ============================================================
 def extract_audio_features(audio_path, target_dim=D_M_AUDIO):
     y, sr = librosa.load(audio_path, sr=16000, mono=True)
     mel = librosa.feature.melspectrogram(
-        y=y, sr=sr, n_mels=target_dim,
-        n_fft=512, hop_length=256
+        y=y,
+        sr=sr,
+        n_mels=target_dim,
+        n_fft=512,
+        hop_length=256
     )
     mel = librosa.power_to_db(mel, ref=np.max)
     return mel.T.astype(np.float32)  # (L, D)
 
-# ---------------- Model Singleton ----------------
+# ============================================================
+# MODEL SINGLETON
+# ============================================================
 _model = None
 
 def load_model():
@@ -110,6 +134,9 @@ def load_model():
         spikformer_model=spikformer
     ).to(DEVICE)
 
+    if not os.path.exists(CHECKPOINT_PATH):
+        raise FileNotFoundError(f"Checkpoint not found: {CHECKPOINT_PATH}")
+
     state = torch.load(CHECKPOINT_PATH, map_location=DEVICE)
     model.load_state_dict(state, strict=False)
     model.eval()
@@ -117,13 +144,35 @@ def load_model():
     _model = model
     return model
 
-# ---------------- Emotion Inference ----------------
+# ============================================================
+# EMOTION INFERENCE
+# ============================================================
 def infer_emotion(audio_path: str):
     model = load_model()
 
+    # -------------------------------
+    # Extract features
+    # -------------------------------
     audio_feats = extract_audio_features(audio_path)
-    L = audio_feats.shape[0]
 
+    # -------------------------------
+    # FIXED LENGTH HANDLING (CRITICAL)
+    # -------------------------------
+    if audio_feats.shape[0] > MAX_AUDIO_LEN:
+        audio_feats = audio_feats[:MAX_AUDIO_LEN]
+    else:
+        pad_len = MAX_AUDIO_LEN - audio_feats.shape[0]
+        audio_feats = np.pad(
+            audio_feats,
+            ((0, pad_len), (0, 0)),
+            mode="constant"
+        )
+
+    L = MAX_AUDIO_LEN
+
+    # -------------------------------
+    # Build model inputs
+    # -------------------------------
     texts = torch.zeros((1, L, ROBERTA_DIM), device=DEVICE)
     audios = torch.tensor(audio_feats).unsqueeze(0).to(DEVICE)
     visuals = torch.zeros((1, L, D_M_VISUAL), device=DEVICE)
@@ -132,6 +181,9 @@ def infer_emotion(audio_path: str):
     utterance_masks = torch.ones((1, L), device=DEVICE)
     padded_labels = torch.zeros((1, L), device=DEVICE).long()
 
+    # -------------------------------
+    # Forward pass
+    # -------------------------------
     with torch.no_grad():
         _, _, _, _, logits = model(
             texts,
@@ -145,7 +197,11 @@ def infer_emotion(audio_path: str):
         probs = F.softmax(logits, dim=-1)
         mean_probs = probs.mean(dim=0)
 
-    probs_dict = {LABEL_MAP[i]: float(mean_probs[i]) for i in range(N_CLASSES)}
+    probs_dict = {
+        LABEL_MAP[i]: float(mean_probs[i])
+        for i in range(N_CLASSES)
+    }
+
     pred_idx = mean_probs.argmax().item()
 
     return {
