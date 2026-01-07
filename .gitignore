@@ -43,3 +43,4 @@ snn/multimodal/data_sorted/**
 
 /Project/temp
 *.pt
+*.mp4

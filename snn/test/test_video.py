@@ -184,7 +184,7 @@ def extract_visual_features(video_path, target_len):
 def main():
 
     checkpoint = "model/spikemo_best_IEMOCAP.pt"
-    video_file = "video/test2.mp4"
+    video_file = "video/test3.mp4"
 
     # -----------------------------
     # Build Spikformer
