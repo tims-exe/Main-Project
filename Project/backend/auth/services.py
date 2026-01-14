@@ -95,22 +95,29 @@ def get_user(db: Session, google_user_info: dict) -> User:
     return user 
 
 # create jwt access token
-def create_access_token(data: dict) -> str:
-    to_encode = data.copy()
-    encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
-    return encoded_jwt
+def create_access_token(data: TokenData) -> str:
+    to_encode = {
+        "email": data.email,
+        "user_id": data.user_id
+    }
+    return jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+
 
 # verify jwt token
 def verify_token(token: str) -> TokenData:
     try:
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
-        email: str = payload.get("sub")
+        email: str = payload.get("email")
+        user_id: str = payload.get("user_id")
         if email is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Could not validate credentials"
             )
-        return TokenData(email=email)
+        return TokenData(
+            email=email,
+            user_id=user_id
+        )
     
     except JWTError:
         raise HTTPException(

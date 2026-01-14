@@ -3,6 +3,7 @@ persistent-terminals.log
 
 # data and embeddings
 snn/multimodal-snn/data/**
+snn/multimodal/AFEW-VA/**
 
 # caches
 **/__pycache__/
@@ -29,7 +30,17 @@ Project/backend/snn_best_model.pth
 .env
 .python-version
 .venv
+.venv-engine
 best_model.pth
 
 # audio-specific caches
 Project/backend/**/__pycache__/
+
+# data files
+snn/multimodal/data/**
+snn/multimodal/data_sorted/**
+
+
+/Project/temp
+*.pt
+*.mp4

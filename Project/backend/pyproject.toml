@@ -15,6 +15,7 @@ dependencies = [
     "pydantic>=2.12.3",
     "python-jose[cryptography]>=3.5.0",
     "python-multipart>=0.0.20",
+    "redis[hiredis]>=7.0.1",
     "snntorch>=0.9.4",
     "spikingjelly>=0.0.0.0.14",
     "sqlalchemy>=2.0.44",

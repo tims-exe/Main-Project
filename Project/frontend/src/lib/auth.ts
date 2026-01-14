@@ -33,9 +33,8 @@ export const logout = (): void => {
 
 // Cookie helper functions
 function setCookie(name: string, value: string, days: number) {
-    const expires = new Date();
-    expires.setTime(expires.getTime() + days * 24 * 60 * 60 * 1000);
-    document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/;SameSite=Lax`;
+    const expires = new Date(Date.now() + days * 864e5).toUTCString();
+    document.cookie = `${name}=${value}; expires=${expires}; path=/; SameSite=Lax; Secure`;
 }
 
 function getCookie(name: string): string | null {
